@@ -1,0 +1,78 @@
+// Copyright (c) 2023, Assia Benbihi
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//
+//     * Neither the name of the <organization> nor the names of
+//       its contributors may be used to endorse or promote products derived
+//       from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+
+// Author: Assia Benbihi (abenbihi-at-georgiatech-hyphen-metz-dot-fr)
+//                       (assia-dot-benbihi-at-cvut-dot-cz)
+
+#include "base/camera.h"
+#include "base/undistortion.h"
+
+#include "goma/feature/lsd.h"
+#include "goma/scene/line_segment.h"
+
+namespace goma {
+
+std::vector<LineSegment> DetectColmapLineSegments(const std::string& image_path,
+    const colmap::Camera& camera, const int min_line_segment_size,
+    const int undistortion_max_size){
+  colmap::Bitmap bitmap;
+  CHECK(bitmap.Read(image_path));
+
+  colmap::UndistortCameraOptions undistortion_options;
+  undistortion_options.max_image_size = undistortion_max_size;
+
+  colmap::Bitmap undistorted_bitmap;
+  colmap::Camera undistorted_camera;
+  if (undistortion_options.max_image_size < 0){
+    undistorted_bitmap = bitmap;
+    undistorted_camera = camera;
+  }
+  else{
+    colmap::UndistortImage(undistortion_options, bitmap, camera, &undistorted_bitmap,
+        &undistorted_camera);
+  }
+
+  const std::vector<colmap::LineSegment> colmap_line_segments =
+    colmap::DetectLineSegments(undistorted_bitmap, min_line_segment_size);
+  
+  std::vector<LineSegment> line_segments;
+  for (size_t i=0; i<colmap_line_segments.size(); i++){
+    LineSegment line_segment;
+    line_segment.start = colmap_line_segments[i].start;
+    line_segment.end = colmap_line_segments[i].end;
+    line_segment.score = 1.;
+    line_segment.line_segment_id = i;
+    line_segment.registered = true;
+    line_segments.push_back(line_segment);
+  }
+
+  return line_segments;
+}
+
+} // namespace goma
